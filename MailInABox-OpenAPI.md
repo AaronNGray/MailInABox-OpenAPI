@@ -28,7 +28,7 @@ docker run --rm \
   -v ${PWD}:/mnt/c/Users/aaron/Test/OpenAPI/MailInABox openapitools/openapi-generator-cli generate \
   -i /mnt/c/Users/aaron/Test/OpenAPI/MailInABox/mailinabox.yml \
   -g nodejs-express-server \
-  -o /mnt/c/Users/aaron/Test/OpenAPI/MailInABox/ts
+  -o /mnt/c/Users/aaron/Test/OpenAPI/MailInABox/nodejs-express-server
 ```
 
 ```
