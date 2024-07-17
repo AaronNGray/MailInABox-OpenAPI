@@ -4,7 +4,7 @@
 ```
 docker run --rm \
   -v ${PWD}:/mnt/c/Users/aaron/Test/OpenAPI/MailInABox openapitools/openapi-generator-cli validate \
-  -i /mnt/c/Users/aaron/Test/OpenAPI/MailInABox/mailinabox.yml \
+  -i /mnt/c/Users/aaron/Test/OpenAPI/MailInABox/mailinabox.yml
 ```
 ## Generate Python
 ```
@@ -22,6 +22,15 @@ docker run --rm \
   -g typescript \
   -o /mnt/c/Users/aaron/Test/OpenAPI/MailInABox/ts
 ```
+## Generate Node.js express server 
+```
+docker run --rm \
+  -v ${PWD}:/mnt/c/Users/aaron/Test/OpenAPI/MailInABox openapitools/openapi-generator-cli generate \
+  -i /mnt/c/Users/aaron/Test/OpenAPI/MailInABox/mailinabox.yml \
+  -g nodejs-express-server \
+  -o /mnt/c/Users/aaron/Test/OpenAPI/MailInABox/ts
+```
+
 ```
 --skip-validate-spec
 ```
