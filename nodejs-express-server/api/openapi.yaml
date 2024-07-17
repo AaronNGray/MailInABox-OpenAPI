@@ -1,0 +1,4021 @@
+openapi: 3.0.3
+info:
+  contact:
+    name: Mail-in-a-Box support
+    url: https://mailinabox.email/
+  description: |
+    Mail-in-a-Box API HTTP specification.
+
+    # Introduction
+    This API is documented in [**OpenAPI format**](http://spec.openapis.org/oas/v3.0.3).
+    ([View the full HTTP specification](https://raw.githubusercontent.com/mail-in-a-box/mailinabox/api-spec/api/mailinabox.yml).)
+
+    All endpoints are relative to `https://{host}/admin` and are secured with [`Basic Access` authentication](https://en.wikipedia.org/wiki/Basic_access_authentication). If you have multi-factor authentication enabled, authentication with a `user:password` combination will fail unless a valid OTP is supplied via the `x-auth-token` header. Authentication via a `user:user_key` pair is possible without the header being present.
+  license:
+    name: CC0 1.0 Universal
+    url: https://creativecommons.org/publicdomain/zero/1.0/legalcode
+  title: Mail-in-a-Box
+  version: "60.5"
+  x-logo:
+    url: https://mailinabox.email/static/logo.png
+    altText: Mail-in-a-Box logo
+externalDocs:
+  description: Find out more about Mail-in-a-box.
+  url: https://mailinabox.email/
+servers:
+- url: "https://{host}/admin"
+  variables:
+    host:
+      default: box.example.com
+      description: The API hostname.
+security:
+- basicAuth: []
+tags:
+- description: Endpoints related to user authentication.
+  name: User
+- description: |
+    Mail operations, which include getting all users, getting all aliases, adding/updating/removing users and aliases and getting all mail domains.
+  name: Mail
+- description: |
+    DNS operations, which include adding custom records, adding a secondary nameserver and viewing all DNS records.
+  name: DNS
+- description: |
+    TLS (SSL) Certificates operations, which include checking certificate status
+    and installing custom certificates.
+  name: SSL
+- description: |
+    Static web hosting operations, which include getting domain information and updating domain root directories.
+  name: Web
+- description: |
+    Manage multi-factor authentication schemes. Currently, only TOTP is supported.
+  name: MFA
+- description: |
+    System operations, which include system status checks, new version checks
+    and reboot status.
+  name: System
+- description: |
+    PGP Key operations, which include key management and publishing.
+  name: PGP
+- description: |
+    WKD (Web Key Directory) operations, which include publishing public PGP keys on the internet.
+  name: WKD
+paths:
+  /login:
+    post:
+      description: |
+        Returns user information and a session API key.
+
+        Authenticate a user by supplying the auth token as a base64 encoded string in
+        format `email:password` using basic authentication headers.
+
+        If successful, a long-lived `api_key` is returned which can be used for subsequent
+        requests to the API in place of the password.
+      operationId: login
+      responses:
+        "200":
+          content:
+            application/json:
+              examples:
+                invalid:
+                  value:
+                    reason: Incorrect username or password
+                    status: invalid
+                ok:
+                  value:
+                    api_key: 1a2b3c4d5e6f7g8h9i0j
+                    email: user@example.com
+                    privileges:
+                    - admin
+                    status: ok
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+          description: Successful operation
+      summary: Exchange a username and password for a session API key.
+      tags:
+      - User
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/login" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/UserController
+  /logout:
+    post:
+      description: |
+        Invalidates a session API key so that it cannot be used after this API call.
+      operationId: logout
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResponse'
+          description: Successful operation
+      summary: Invalidates a session API key.
+      tags:
+      - User
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/logout" \
+            -u "<email>:<session_key>"
+      x-eov-operation-handler: controllers/UserController
+  /system/status:
+    post:
+      description: |
+        Returns an array of statuses which can include headings.
+      operationId: getSystemStatus
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+              - type: heading
+                text: System
+                extra: []
+              - type: warning
+                text: This domain's DNSSEC DS record is not set
+                extra:
+                - monospace: false
+                  text: "Digest Type: 2 / SHA-25"
+              schema:
+                $ref: '#/components/schemas/SystemStatusResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get system status
+      tags:
+      - System
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/system/status" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/SystemController
+  /system/version:
+    get:
+      description: Returns installed Mail-in-a-Box version.
+      operationId: getSystemVersion
+      responses:
+        "200":
+          content:
+            text/html:
+              example: v0.46
+              schema:
+                $ref: '#/components/schemas/SystemVersionResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get system version
+      tags:
+      - System
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/system/version" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/SystemController
+  /system/latest-upstream-version:
+    post:
+      description: Returns Mail-in-a-Box upstream version.
+      operationId: getSystemUpstreamVersion
+      responses:
+        "200":
+          content:
+            text/html:
+              example: v0.47
+              schema:
+                $ref: '#/components/schemas/SystemVersionUpstreamResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get system upstream version
+      tags:
+      - System
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/system/latest-upstream-version" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/SystemController
+  /system/updates:
+    get:
+      description: Returns system (apt) updates.
+      operationId: getSystemUpdates
+      responses:
+        "200":
+          content:
+            text/html:
+              example: |
+                libgnutls30 (3.5.18-1ubuntu1.4)
+                libxau6 (1:1.0.8-1ubuntu1)
+              schema:
+                $ref: '#/components/schemas/SystemUpdatesResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get system updates
+      tags:
+      - System
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/system/updates" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/SystemController
+  /system/update-packages:
+    post:
+      description: Updates system (apt) packages.
+      operationId: updateSystemPackages
+      responses:
+        "200":
+          content:
+            text/html:
+              example: |
+                Calculating upgrade...
+                The following packages will be upgraded:
+                  cloud-init grub-common
+              schema:
+                $ref: '#/components/schemas/SystemUpdatePackagesResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Update system packages
+      tags:
+      - System
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/system/update-packages" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/SystemController
+  /system/privacy:
+    get:
+      description: |
+        Returns system privacy (new-version check) status.
+
+        Response:
+
+          - `true`: Private, new-version checks will not be performed
+          - `false`: Not private, new-version checks will be performed
+      operationId: getSystemPrivacyStatus
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemPrivacyStatusResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get system privacy status
+      tags:
+      - System
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/system/privacy" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/SystemController
+    post:
+      description: |
+        Updates system privacy (new-version checks).
+
+        Request:
+
+          - `value: private`: Disable new version checks
+          - `value: off`: Enable new version checks
+      operationId: updateSystemPrivacy
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            examples:
+              enable:
+                summary: Enable new version checks
+                value:
+                  value: "off"
+              disable:
+                summary: Disable new version checks
+                value:
+                  value: private
+            schema:
+              $ref: '#/components/schemas/SystemPrivacyUpdateRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            text/html:
+              example: OK
+              schema:
+                $ref: '#/components/schemas/SystemPrivacyUpdateResponse'
+          description: Successful operation
+        "400":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Bad request
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Update system privacy
+      tags:
+      - System
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/system/privacy" \
+            -d "value=<string>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/SystemController
+  /system/reboot:
+    get:
+      description: |
+        Returns the system reboot status.
+
+        Response:
+
+          - `true`: A reboot is required
+          - `false`: A reboot is not required
+      operationId: getSystemRebootStatus
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemRebootStatusResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get system reboot status
+      tags:
+      - System
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/system/reboot" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/SystemController
+    post:
+      description: Reboots the system.
+      operationId: rebootSystem
+      responses:
+        "200":
+          content:
+            text/html:
+              example: "No reboot is required, so it is not allowed."
+              schema:
+                $ref: '#/components/schemas/SystemRebootResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Reboot system
+      tags:
+      - System
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/system/reboot" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/SystemController
+  /system/backup/status:
+    get:
+      description: |
+        Returns the system backup status.
+
+        If the list of backups is empty, this implies no backups have been made yet.
+      operationId: getSystemBackupStatus
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemBackupStatusResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get system backup status
+      tags:
+      - System
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/system/backup/status" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/SystemController
+  /system/backup/config:
+    get:
+      description: Returns the system backup config.
+      operationId: getSystemBackupConfig
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemBackupConfigResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get system backup config
+      tags:
+      - System
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/system/backup/config" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/SystemController
+    post:
+      description: Updates the system backup config.
+      operationId: updateSystemBackupConfig
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            examples:
+              s3:
+                summary: S3 backup
+                value:
+                  target: s3://s3.eu-central-1.amazonaws.com/box-example-com
+                  target_user: ACCESS_KEY
+                  target_pass: SECRET_ACCESS_KEY
+                  minAge: 3
+              local:
+                summary: Local backup
+                value:
+                  target: local
+                  target_user: ""
+                  target_pass: ""
+                  minAge: 3
+              rsync:
+                summary: Rsync backup
+                value:
+                  target: rsync://username@box.example.com//backups/box.example.com
+                  target_user: ""
+                  target_pass: ""
+                  minAge: 3
+              "false":
+                summary: Disable backups
+                value:
+                  target: "off"
+                  target_user: ""
+                  target_pass: ""
+                  minAge: 0
+            schema:
+              $ref: '#/components/schemas/SystemBackupConfigUpdateRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            text/html:
+              example: OK
+              schema:
+                $ref: '#/components/schemas/SystemBackupConfigUpdateResponse'
+          description: Successful operation
+        "400":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Bad request
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Update system backup config
+      tags:
+      - System
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/system/backup/config" \
+            -d "target=<hostname>" \
+            -d "target_user=<string>" \
+            -d "target_pass=<password>" \
+            -d "min_age=<integer>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/SystemController
+  /system/backup/new:
+    post:
+      description: Performs a system backup.
+      operationId: performSystemBackup
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            examples:
+              incremental:
+                summary: Perform incremental backup.
+                value:
+                  full: false
+              full:
+                summary: Force a full backup.
+                value:
+                  full: true
+            schema:
+              $ref: '#/components/schemas/PerformBackupRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            text/html:
+              schema:
+                $ref: '#/components/schemas/PerformBackupResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/plain:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Perform system backup
+      tags:
+      - System
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/system/backup/new" \
+            -d "full=<boolean>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/SystemController
+  /system/smtp/relay:
+    get:
+      description: Gets basic configuration on how the box should use third-party
+        relay services to deliver mail.
+      operationId: getRelayConfig
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SmtpRelayConfig'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get SMTP relay configuration
+      tags:
+      - System
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/system/smtp/relay" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/SystemController
+    post:
+      description: Sets the configuration on how the box should use third-party relays
+        to deliver mail.
+      operationId: setRelayConfig
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            examples:
+              disable:
+                summary: Do not use relays.
+                value:
+                  enabled: false
+                  host: ""
+                  auth_enabled: false
+                  user: ""
+                  key: ""
+              no_auth:
+                summary: Use a relay that does not require authentication.
+                value:
+                  enabled: true
+                  host: smtp.relay.net
+                  auth_enabled: false
+                  user: ""
+                  key: ""
+              auth:
+                summary: Use a relay that requires authentication.
+                value:
+                  enabled: true
+                  host: smtp.relay.net
+                  auth_enabled: true
+                  user: someuser
+                  key: key-or-password-here
+            schema:
+              $ref: '#/components/schemas/SetSmtpRelayConfigRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            text/plain:
+              schema:
+                type: string
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Set SMTP relay configuration
+      tags:
+      - System
+      x-eov-operation-handler: controllers/SystemController
+  /system/pgp/:
+    get:
+      description: Gets a JSON summary of all public PGP keys in the keyring.
+      operationId: getPGPKeys
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+                daemon:
+                  ids:
+                  - Power Mail-in-a-Box Management Daemon <administrator@mailinabox.lan>
+                  master_fpr: 62037B88B743626997E63EFE2469394FBC0CF8DA
+                  revoked: false
+                  subkeys:
+                  - algorithm: RSA
+                    auth: true
+                    cert: true
+                    encr: true
+                    sign: true
+                    bits: 4096
+                    expired: false
+                    expires: 1617378256
+                    expires_date: 04/02/21
+                    expires_days: 179
+                    fpr: 62037B88B743626997E63EFE2469394FBC0CF8DA
+                    master: true
+                imported:
+                - ids:
+                  - Someone You Used To Know <nobody@nowhere>
+                  master_fpr: B9BD7309D18784392D812050A174D33254CC2820
+                  revoked: false
+                  subkeys:
+                  - algorithm: RSA
+                    auth: true
+                    cert: true
+                    encr: true
+                    sign: true
+                    bits: 4096
+                    expired: false
+                    expires: 1615290372
+                    expires_date: 03/09/21
+                    expires_days: 155
+                    fpr: B9BD7309D18784392D812050A174D33254CC2820
+                    master: true
+                - ids:
+                  - Linus Torvalds <torvalds@kernel.org>
+                  - Linus Torvalds <torvalds@linux-foundation.org>
+                  master_fpr: ABAF11C65A2970B130ABE3C479BE3E4300411886
+                  revoked: false
+                  subkeys:
+                  - algorithm: RSA
+                    auth: false
+                    cert: true
+                    encr: false
+                    sign: true
+                    bits: 2048
+                    expired: false
+                    expires: null
+                    expires_date: null
+                    expires_days: null
+                    fpr: ABAF11C65A2970B130ABE3C479BE3E4300411886
+                    master: true
+                  - algorithm: RSA
+                    auth: false
+                    cert: false
+                    encr: true
+                    sign: false
+                    bits: 2048
+                    expired: false
+                    expires: null
+                    expires_date: null
+                    expires_days: null
+                    fpr: AEE416F7DCCB753BB3D5609D88BCE80F012F54CA
+                    master: false
+              schema:
+                $ref: '#/components/schemas/PgpKeyring'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get all PGP keys
+      tags:
+      - PGP
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/system/pgp/" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/PGPController
+  /system/pgp/{fpr}:
+    delete:
+      description: Removes the PGP key with the given fingerprint from the keyring
+      operationId: removePGPKey
+      responses:
+        "200":
+          content:
+            text/plain:
+              example: OK
+              schema:
+                type: string
+          description: Operation successful
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+        "404":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Key not found in public keyring
+      summary: Remove a PGP key
+      tags:
+      - PGP
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X DELETE "https://{host}/admin/system/pgp/<fingerprint>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/PGPController
+    get:
+      description: Gets a JSON summary of the PGP key with the given fingerprint.
+      operationId: getPGPKey
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+                ids:
+                - Power Mail-in-a-Box Management Daemon <administrator@mailinabox.lan>
+                master_fpr: 62037B88B743626997E63EFE2469394FBC0CF8DA
+                revoked: false
+                subkeys:
+                - algorithm: RSA
+                  auth: true
+                  cert: true
+                  encr: true
+                  sign: true
+                  bits: 4096
+                  expired: false
+                  expires: 1617378256
+                  expires_date: 04/02/21
+                  expires_days: 179
+                  fpr: 62037B88B743626997E63EFE2469394FBC0CF8DA
+                  master: true
+              schema:
+                $ref: '#/components/schemas/PgpKey'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+        "404":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Key not found in public keyring
+      summary: Get a specific PGP key
+      tags:
+      - PGP
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/system/pgp/<fingerprint>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/PGPController
+  /system/pgp/{fpr}/export:
+    get:
+      description: Exports the PGP key with the given fingerprint.
+      operationId: exportPGPKey
+      responses:
+        "200":
+          content:
+            text/plain:
+              example: |
+                -----BEGIN PGP PUBLIC KEY BLOCK-----
+
+                mQINBF957dABEADz7P2flznzRq5wuUhxDS+wytdn8yQhMXZr7kvcpwbRl9f7+dx3
+                ...
+                vo4j/rEYuOuqVo+TwsO0XNCfsA8as/UPLA9CgIxXXoIFmy2rL298lPQg5HgJ
+                =via/
+                -----END PGP PUBLIC KEY BLOCK-----
+              schema:
+                $ref: '#/components/schemas/PgpKeyExport'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+        "404":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Key not found in public keyring
+      summary: Export a PGP key
+      tags:
+      - PGP
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/system/pgp/<fingerprint>/export" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/PGPController
+  /system/pgp/import:
+    post:
+      description: Imports a PGP key block into the keyring. Only public keys are
+        accepted.
+      operationId: importPGPKey
+      responses:
+        "200":
+          content:
+            text/plain:
+              example:
+                keys_read: 1
+                keys_added: 1
+                keys_unchanged: 0
+                uids_added: 0
+                sigs_added: 0
+                revs_added: 0
+              schema:
+                $ref: '#/components/schemas/PgpKeyImportResult'
+          description: Successful operation
+        "400":
+          content:
+            text/plain:
+              examples:
+                private_key:
+                  value: Import cannot contain private keys!
+                invalid_format:
+                  value: Import is not a valid PGP key block!
+              schema:
+                type: string
+          description: Import refused
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Import a PGP key
+      tags:
+      - PGP
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/system/pgp/import" \
+            --data-urlencode "key=$(gpg --export --armor <fingerprint>)" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/PGPController
+  /system/pgp/wkd:
+    get:
+      description: "Gets the current configuration applied to the Web Key Directory\
+        \ for each email hosted in the box, along with a JSON summary of all public\
+        \ PGP keys in the keyring."
+      operationId: getWKDstatus
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+                keys:
+                - ids:
+                  - Power Mail-in-a-Box Management Daemon <administrator@mailinabox.lan>
+                  master_fpr: 62037B88B743626997E63EFE2469394FBC0CF8DA
+                  revoked: false
+                  subkeys:
+                  - algorithm: RSA
+                    auth: true
+                    cert: true
+                    encr: true
+                    sign: true
+                    bits: 4096
+                    expired: false
+                    expires: 1617378256
+                    expires_date: 04/02/21
+                    expires_days: 179
+                    fpr: 62037B88B743626997E63EFE2469394FBC0CF8DA
+                    master: true
+                - ids:
+                  - Someone You Used To Know <nobody@nowhere>
+                  master_fpr: B9BD7309D18784392D812050A174D33254CC2820
+                  revoked: false
+                  subkeys:
+                  - algorithm: RSA
+                    auth: true
+                    cert: true
+                    encr: true
+                    sign: true
+                    bits: 4096
+                    expired: false
+                    expires: 1615290372
+                    expires_date: 03/09/21
+                    expires_days: 155
+                    fpr: B9BD7309D18784392D812050A174D33254CC2820
+                    master: true
+                - ids:
+                  - Linus Torvalds <torvalds@kernel.org>
+                  - Linus Torvalds <torvalds@linux-foundation.org>
+                  master_fpr: ABAF11C65A2970B130ABE3C479BE3E4300411886
+                  revoked: false
+                  subkeys:
+                  - algorithm: RSA
+                    auth: false
+                    cert: true
+                    encr: false
+                    sign: true
+                    bits: 2048
+                    expired: false
+                    expires: null
+                    expires_date: null
+                    expires_days: null
+                    fpr: ABAF11C65A2970B130ABE3C479BE3E4300411886
+                    master: true
+                  - algorithm: RSA
+                    auth: false
+                    cert: false
+                    encr: true
+                    sign: false
+                    bits: 2048
+                    expired: false
+                    expires: null
+                    expires_date: null
+                    expires_days: null
+                    fpr: AEE416F7DCCB753BB3D5609D88BCE80F012F54CA
+                    master: false
+                wkd:
+                  me@mailinabox.lan:
+                    selection: null
+                    options: []
+                  administrator@mailinabox.lan:
+                    selection: 62037B88B743626997E63EFE2469394FBC0CF8DA
+                    options:
+                    - 62037B88B743626997E63EFE2469394FBC0CF8DA
+              schema:
+                $ref: '#/components/schemas/getWKDstatus_200_response'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get WKD status
+      tags:
+      - WKD
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/system/pgp/wkd" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/WKDController
+  /ssl/status:
+    get:
+      description: Returns the SSL status for all domains.
+      operationId: getSSLStatus
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SSLStatusResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get SSL status
+      tags:
+      - SSL
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/ssl/status" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/SSLController
+  /ssl/csr/{domain}:
+    post:
+      description: |
+        Generates a Certificate Signing Request (CSR) for a domain & country code.
+      operationId: generateSSLCSR
+      parameters:
+      - description: Domain to generate CSR for.
+        explode: false
+        in: path
+        name: domain
+        required: true
+        schema:
+          $ref: '#/components/schemas/Hostname'
+        style: simple
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            example:
+              countrycode: GB
+            schema:
+              $ref: '#/components/schemas/SSLCSRGenerateRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            text/html:
+              example: |
+                -----BEGIN CERTIFICATE REQUEST-----
+                MIICaDCCAVACAQAwIzELMAkGA1UEBhMCQlMxFDASBgNVBAMMC2V4YW1wbGUuY29t
+                ...
+                JmFDQESSfUxLPHLC660Wnf3GmrP/duZHpPC+qTe8b1AlQ7zDT3cOaAQ+Mb0=
+                -----END CERTIFICATE REQUEST-----
+              schema:
+                $ref: '#/components/schemas/SSLCSRGenerateResponse'
+          description: Successful operation
+        "400":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Bad request
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Generate SSL CSR
+      tags:
+      - SSL
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/ssl/csr/<hostname>" \
+            -d "countrycode=<string>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/SSLController
+  /ssl/install:
+    post:
+      description: |
+        Installs a custom certificate. The chain certificate is optional.
+      operationId: installSSLCertificate
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            example:
+              domain: example.com
+              cert: CERT_STRING
+              chain: CHAIN_STRING
+            schema:
+              $ref: '#/components/schemas/SSLCertificateInstallRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            text/html:
+              example: OK
+              schema:
+                $ref: '#/components/schemas/SSLCertificateInstallResponse'
+          description: Successful operation
+        "400":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Bad request
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Install SSL certificate
+      tags:
+      - SSL
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/ssl/install" \
+            -d "domain=<hostname>" \
+            -d "cert=<string>" \
+            -d "chain=<string>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/SSLController
+  /ssl/provision:
+    post:
+      description: |
+        Provisions certificates for all domains.
+      operationId: provisionSSLCertificates
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SSLCertificatesProvisionResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Provision SSL certificates
+      tags:
+      - SSL
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/ssl/provision" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/SSLController
+  /dns/secondary-nameserver:
+    get:
+      description: |
+        Returns a list of nameserver hostnames.
+      operationId: getDnsSecondaryNameserver
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DNSSecondaryNameserverResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get DNS secondary nameserver
+      tags:
+      - DNS
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/dns/secondary-nameserver" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/DNSController
+    post:
+      description: |
+        Adds one or more secondary nameservers.
+      operationId: addDnsSecondaryNameserver
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            example:
+              hostnames: "ns2.hostingcompany.com, ns3.hostingcompany.com"
+            schema:
+              $ref: '#/components/schemas/DNSSecondaryNameserverAddRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            text/html:
+              example: "updated DNS: example.com"
+              schema:
+                $ref: '#/components/schemas/DNSSecondaryNameserverAddResponse'
+          description: Successful operation
+        "400":
+          content:
+            text/html:
+              schema:
+                example: Could not resolve the IP address of badhostname
+                type: string
+          description: Bad request
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Add DNS secondary nameserver
+      tags:
+      - DNS
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/dns/secondary-nameserver" \
+            -d "hostnames=<string>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/DNSController
+  /dns/zones:
+    get:
+      description: Returns an array of all managed top-level domains.
+      operationId: getDnsZones
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DNSZonesResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get DNS zones
+      tags:
+      - DNS
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/dns/zones" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/DNSController
+  /dns/zonefile/{zone}:
+    get:
+      description: Returns a DNS zone file for a hostname.
+      operationId: getDnsZonefile
+      parameters:
+      - description: Hostname
+        explode: false
+        in: path
+        name: zone
+        required: true
+        schema:
+          $ref: '#/components/schemas/Hostname'
+        style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DNSZonefileResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get DNS zonefile
+      tags:
+      - DNS
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/dns/zonefile/<zone>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/DNSController
+  /dns/update:
+    post:
+      description: Updates the DNS. Involves creating zone files and restarting `nsd`.
+      operationId: updateDns
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            example:
+              force: 1
+            schema:
+              $ref: '#/components/schemas/DNSUpdateRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DNSUpdateResponse'
+          description: Successful operation
+        "400":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Bad request
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Update DNS
+      tags:
+      - DNS
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/dns/update" \
+            -d "force=<integer>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/DNSController
+  /dns/custom:
+    get:
+      description: Returns all custom DNS records.
+      operationId: getDnsCustomRecords
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DNSCustomRecordsResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get DNS custom records
+      tags:
+      - DNS
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/dns/custom" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/DNSController
+  /dns/custom/{qname}/{rtype}:
+    delete:
+      description: "Removes a DNS custom record for the specified domain, type & value."
+      operationId: removeDnsCustomRecord
+      parameters:
+      - description: DNS record query name
+        explode: false
+        in: path
+        name: qname
+        required: true
+        schema:
+          $ref: '#/components/schemas/Hostname'
+        style: simple
+      - description: Record type
+        explode: false
+        in: path
+        name: rtype
+        required: true
+        schema:
+          $ref: '#/components/schemas/DNSRecordType'
+        style: simple
+      requestBody:
+        $ref: '#/components/requestBodies/DNSCustomRecordRequest'
+      responses:
+        "200":
+          content:
+            text/html:
+              example: "updated DNS: example.com"
+              schema:
+                $ref: '#/components/schemas/DNSCustomRecordRemoveResponse'
+          description: Successful operation
+        "400":
+          content:
+            text/html:
+              schema:
+                example: badhostname is not a domain name or a subdomain of a domain
+                  name managed by this box
+                type: string
+          description: Bad request
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Remove DNS custom record
+      tags:
+      - DNS
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X DELETE "https://{host}/admin/dns/custom/<qname>/<rtype>" \
+            -H "Content-Type: text/plain" \
+            --data-raw "<string>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/DNSController
+    get:
+      description: Returns all custom records for the specified query name and type.
+      operationId: getDnsCustomRecordsForQNameAndType
+      parameters:
+      - description: DNS record query name
+        explode: false
+        in: path
+        name: qname
+        required: true
+        schema:
+          $ref: '#/components/schemas/Hostname'
+        style: simple
+      - description: Record type
+        explode: false
+        in: path
+        name: rtype
+        required: true
+        schema:
+          $ref: '#/components/schemas/DNSRecordType'
+        style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DNSCustomRecordsResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get DNS custom records
+      tags:
+      - DNS
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/dns/custom/<qname>/<rtype>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/DNSController
+    post:
+      description: Adds a custom DNS record for the specified query name and type.
+      operationId: addDnsCustomRecord
+      parameters:
+      - description: DNS record query name
+        explode: false
+        in: path
+        name: qname
+        required: true
+        schema:
+          $ref: '#/components/schemas/Hostname'
+        style: simple
+      - description: Record type
+        explode: false
+        in: path
+        name: rtype
+        required: true
+        schema:
+          $ref: '#/components/schemas/DNSRecordType'
+        style: simple
+      requestBody:
+        $ref: '#/components/requestBodies/DNSCustomRecordRequest'
+      responses:
+        "200":
+          content:
+            text/html:
+              example: "updated DNS: example.com"
+              schema:
+                $ref: '#/components/schemas/DNSCustomRecordUpsertResponse'
+          description: Successful operation
+        "400":
+          content:
+            text/html:
+              schema:
+                example: '''badhostname'' does not appear to be an IPv4 or IPv6 address'
+                type: string
+          description: Bad request
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Add DNS custom record
+      tags:
+      - DNS
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/dns/custom/<qname>/<rtype>" \
+            -H "Content-Type: text/plain" \
+            --data-raw "<string>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/DNSController
+    put:
+      description: Updates an existing DNS custom record value for the specified qname
+        and type.
+      operationId: updateDnsCustomRecord
+      parameters:
+      - description: DNS record query name
+        explode: false
+        in: path
+        name: qname
+        required: true
+        schema:
+          $ref: '#/components/schemas/Hostname'
+        style: simple
+      - description: Record type
+        explode: false
+        in: path
+        name: rtype
+        required: true
+        schema:
+          $ref: '#/components/schemas/DNSRecordType'
+        style: simple
+      requestBody:
+        $ref: '#/components/requestBodies/DNSCustomRecordRequest'
+      responses:
+        "200":
+          content:
+            text/html:
+              example: "updated DNS: example.com"
+              schema:
+                $ref: '#/components/schemas/DNSCustomRecordUpsertResponse'
+          description: Successful operation
+        "400":
+          content:
+            text/html:
+              schema:
+                example: '''badhostname'' does not appear to be an IPv4 or IPv6 address'
+                type: string
+          description: Bad request
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Update DNS custom record
+      tags:
+      - DNS
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -x PUT "https://{host}/admin/dns/custom/<qname>/<rtype>" \
+            -H "Content-Type: text/plain" \
+            --data-raw "<string>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/DNSController
+  /dns/custom/{qname}:
+    delete:
+      description: Removes a DNS custom A record for the specified domain & value.
+      operationId: removeDnsCustomARecord
+      parameters:
+      - description: DNS query name.
+        explode: false
+        in: path
+        name: qname
+        required: true
+        schema:
+          $ref: '#/components/schemas/Hostname'
+        style: simple
+      requestBody:
+        $ref: '#/components/requestBodies/DNSCustomRecordRequest'
+      responses:
+        "200":
+          content:
+            text/html:
+              example: "updated DNS: example.com"
+              schema:
+                $ref: '#/components/schemas/DNSCustomRecordRemoveResponse'
+          description: Successful operation
+        "400":
+          content:
+            text/html:
+              schema:
+                example: badhostname is not a domain name or a subdomain of a domain
+                  name managed by this box
+                type: string
+          description: Bad request
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Remove DNS custom A record
+      tags:
+      - DNS
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X DELETE "https://{host}/admin/dns/custom/<qname>" \
+            -H "Content-Type: text/plain" \
+            --data-raw "<string>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/DNSController
+    get:
+      description: Returns all custom A records for the specified query name.
+      operationId: getDnsCustomARecordsForQName
+      parameters:
+      - description: DNS query name.
+        explode: false
+        in: path
+        name: qname
+        required: true
+        schema:
+          $ref: '#/components/schemas/Hostname'
+        style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DNSCustomRecordsResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get DNS custom A records
+      tags:
+      - DNS
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/dns/custom/<qname>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/DNSController
+    post:
+      description: Adds a custom DNS A record for the specified query name.
+      operationId: addDnsCustomARecord
+      parameters:
+      - description: DNS query name.
+        explode: false
+        in: path
+        name: qname
+        required: true
+        schema:
+          $ref: '#/components/schemas/Hostname'
+        style: simple
+      requestBody:
+        $ref: '#/components/requestBodies/DNSCustomRecordRequest'
+      responses:
+        "200":
+          content:
+            text/html:
+              example: "updated DNS: example.com"
+              schema:
+                $ref: '#/components/schemas/DNSCustomRecordUpsertResponse'
+          description: Successful operation
+        "400":
+          content:
+            text/html:
+              schema:
+                example: '''badhostname'' does not appear to be an IPv4 or IPv6 address'
+                type: string
+          description: Bad request
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Add DNS custom A record
+      tags:
+      - DNS
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/dns/custom/<qname>" \
+            -H "Content-Type: text/plain" \
+            --data-raw "<string>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/DNSController
+    put:
+      description: Updates an existing DNS custom A record value for the specified
+        qname.
+      operationId: updateDnsCustomARecord
+      parameters:
+      - description: DNS query name.
+        explode: false
+        in: path
+        name: qname
+        required: true
+        schema:
+          $ref: '#/components/schemas/Hostname'
+        style: simple
+      requestBody:
+        $ref: '#/components/requestBodies/DNSCustomRecordRequest'
+      responses:
+        "200":
+          content:
+            text/html:
+              example: "updated DNS: example.com"
+              schema:
+                $ref: '#/components/schemas/DNSCustomRecordUpsertResponse'
+          description: Successful operation
+        "400":
+          content:
+            text/html:
+              schema:
+                example: '''badhostname'' does not appear to be an IPv4 or IPv6 address'
+                type: string
+          description: Bad request
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Update DNS custom A record
+      tags:
+      - DNS
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -x PUT "https://{host}/admin/dns/custom/<qname>" \
+            -H "Content-Type: text/plain" \
+            --data-raw "<string>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/DNSController
+  /dns/dump:
+    get:
+      description: Returns all DNS records.
+      operationId: getDnsDump
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+              - - example1.com
+                - - explanation: Required. Specifies the hostname (and priority) of
+                      the machine that handles @example.com mail.
+                    qname: example1.com
+                    rtype: MX
+                    value: 10 box.example1.com.
+              - - example2.com
+                - - explanation: Required. Specifies the hostname (and priority) of
+                      the machine that handles @example.com mail.
+                    qname: example2.com
+                    rtype: MX
+                    value: 10 box.example2.com.
+              schema:
+                $ref: '#/components/schemas/DNSDumpResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get DNS dump
+      tags:
+      - DNS
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/dns/dump" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/DNSController
+  /mail/users:
+    get:
+      description: Returns all mail users.
+      operationId: getMailUsers
+      parameters:
+      - description: The format of the response.
+        explode: true
+        in: query
+        name: format
+        required: false
+        schema:
+          $ref: '#/components/schemas/MailUsersResponseFormat'
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MailUsersResponse'
+            text/html:
+              example: |
+                user1@example.com
+                user2@example.com
+              schema:
+                $ref: '#/components/schemas/MailUsersSimpleResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get mail users
+      tags:
+      - Mail
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/mail/users?format=<string>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/MailController
+  /mail/users/add:
+    post:
+      description: Adds a new mail user.
+      operationId: addMailUser
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            examples:
+              normal:
+                summary: Normal user
+                value:
+                  email: user@example.com
+                  password: s3curE_pa5Sw0rD
+                  privileges: ""
+              admin:
+                summary: Admin user
+                value:
+                  email: user@example.com
+                  password: s3curE_pa5Sw0rD
+                  privileges: admin
+            schema:
+              $ref: '#/components/schemas/MailUserAddRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            text/html:
+              example: |
+                mail user added
+                updated DNS: OpenDKIM configuration
+              schema:
+                $ref: '#/components/schemas/MailUserAddResponse'
+          description: Successful operation
+        "400":
+          content:
+            text/html:
+              schema:
+                example: Invalid email address
+                type: string
+          description: Bad request
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Add mail user
+      tags:
+      - Mail
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/mail/users/add" \
+            -d "email=<email>" \
+            -d "password=<password>" \
+            -d "privileges=<string>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/MailController
+  /mail/users/remove:
+    post:
+      description: Removes an existing mail user.
+      operationId: removeMailUser
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            example:
+              email: user@example.com
+            schema:
+              $ref: '#/components/schemas/MailUserRemoveRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            text/html:
+              example: OK
+              schema:
+                $ref: '#/components/schemas/MailUserRemoveResponse'
+          description: Successful operation
+        "400":
+          content:
+            text/html:
+              schema:
+                example: That's not a user (invalid@example.com)
+                type: string
+          description: Bad request
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Remove mail user
+      tags:
+      - Mail
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/mail/users/remove" \
+            -d "email=<email>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/MailController
+  /mail/users/privileges/add:
+    post:
+      description: Adds a privilege to an existing mail user.
+      operationId: addMailUserPrivilege
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            example:
+              email: user@example.com
+              privilege: admin
+            schema:
+              $ref: '#/components/schemas/MailUserAddPrivilegeRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            text/html:
+              example: OK
+              schema:
+                $ref: '#/components/schemas/MailUserAddPrivilegeResponse'
+          description: Successful operation
+        "400":
+          content:
+            text/html:
+              schema:
+                example: That's not a user (invalid@example.com)
+                type: string
+          description: Bad request
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Add mail user privilege
+      tags:
+      - Mail
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/mail/users/privileges/add" \
+            -d "email=<email>" \
+            -d "privilege=<string>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/MailController
+  /mail/users/privileges/remove:
+    post:
+      description: Removes a privilege from an existing mail user.
+      operationId: removeMailUserPrivilege
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            example:
+              email: user@example.com
+              privilege: admin
+            schema:
+              $ref: '#/components/schemas/MailUserRemovePrivilegeRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            text/html:
+              example: OK
+              schema:
+                $ref: '#/components/schemas/MailUserRemovePrivilegeResponse'
+          description: Successful operation
+        "400":
+          content:
+            text/html:
+              schema:
+                example: That's not a user (invalid@example.com)
+                type: string
+          description: Bad request
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Remove mail user privilege
+      tags:
+      - Mail
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/mail/users/privileges/remove" \
+            -d "email=<email>" \
+            -d "privilege=<string>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/MailController
+  /mail/users/password:
+    post:
+      description: Sets a password for an existing mail user.
+      operationId: setMailUserPassword
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            example:
+              email: user@example.com
+              password: s3curE_pa5Sw0rD
+            schema:
+              $ref: '#/components/schemas/MailUserSetPasswordRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            text/html:
+              example: OK
+              schema:
+                $ref: '#/components/schemas/MailUserSetPasswordResponse'
+          description: Successful operation
+        "400":
+          content:
+            text/html:
+              schema:
+                example: Passwords must be at least eight characters
+                type: string
+          description: Bad request
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Set mail user password
+      tags:
+      - Mail
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/mail/users/password" \
+            -d "email=<email>" \
+            -d "password=<password>" \
+            -u "<email>:<password>" \
+      x-eov-operation-handler: controllers/MailController
+  /mail/users/privileges:
+    get:
+      description: Returns all privileges for an existing mail user.
+      operationId: getMailUserPrivileges
+      parameters:
+      - description: The email you want to get privileges for.
+        explode: true
+        in: query
+        name: email
+        required: false
+        schema:
+          $ref: '#/components/schemas/Email'
+        style: form
+      responses:
+        "200":
+          content:
+            text/html:
+              example: admin
+              schema:
+                $ref: '#/components/schemas/MailUserPrivilegesResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get mail user privileges
+      tags:
+      - Mail
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/mail/users/privileges?email=<email>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/MailController
+  /mail/domains:
+    get:
+      description: Returns all mail domains.
+      operationId: getMailDomains
+      responses:
+        "200":
+          content:
+            text/html:
+              example: |
+                example1.com
+                example2.com
+              schema:
+                $ref: '#/components/schemas/MailDomainsResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get mail domains
+      tags:
+      - Mail
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/mail/domains" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/MailController
+  /mail/aliases:
+    get:
+      description: Returns all mail aliases.
+      operationId: getMailAliases
+      parameters:
+      - description: The format of the response.
+        explode: true
+        in: query
+        name: format
+        required: false
+        schema:
+          $ref: '#/components/schemas/MailAliasesResponseFormat'
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/MailAliasByDomain'
+                type: array
+            text/html:
+              schema:
+                $ref: '#/components/schemas/MailAliasesSimpleResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get mail aliases
+      tags:
+      - Mail
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/mail/aliases?format=<string>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/MailController
+  /mail/aliases/add:
+    post:
+      description: |
+        Adds or updates a mail alias. If updating, you need to set `update_if_exists: 1`.
+      operationId: upsertMailAlias
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            examples:
+              regular:
+                summary: Regular alias
+                value:
+                  update_if_exists: 0
+                  address: user@example.com
+                  forwards_to: user2@example.com
+                  permitted_senders: null
+              catchall:
+                summary: Catch-all
+                value:
+                  update_if_exists: 0
+                  address: '@example.com'
+                  forwards_to: user@otherexample.com
+                  permitted_senders: null
+              domainalias:
+                summary: Domain alias
+                value:
+                  update_if_exists: 0
+                  address: '@example.com'
+                  forwards_to: '@otherexample.com'
+                  permitted_senders: null
+              update:
+                summary: Update existing alias
+                value:
+                  update_if_exists: 1
+                  address: user@example.com
+                  forwards_to: user2@example.com
+                  permitted_senders: "user3@example.com, user4@example.com"
+            schema:
+              $ref: '#/components/schemas/MailAliasUpsertRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            text/html:
+              example: alias updated
+              schema:
+                $ref: '#/components/schemas/MailAliasUpsertResponse'
+          description: Successful operation
+        "400":
+          content:
+            text/html:
+              schema:
+                example: Invalid email address (invalid@example.com)
+                type: string
+          description: Bad request
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Upsert mail alias
+      tags:
+      - Mail
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/mail/aliases/add" \
+            -d "update_if_exists=<integer>" \
+            -d "address=<email>" \
+            -d "forwards_to=<string>" \
+            -d "permitted_senders=<string>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/MailController
+  /mail/aliases/remove:
+    post:
+      description: Removes a mail alias.
+      operationId: removeMailAlias
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            example:
+              address: user@example.com
+            schema:
+              $ref: '#/components/schemas/MailAliasRemoveRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            text/html:
+              example: alias removed
+              schema:
+                $ref: '#/components/schemas/MailAliasRemoveResponse'
+          description: Successful operation
+        "400":
+          content:
+            text/html:
+              schema:
+                example: That's not an alias (invalid@example)
+                type: string
+          description: Bad request
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Remove mail alias
+      tags:
+      - Mail
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/mail/aliases/remove" \
+            -d "address=<email>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/MailController
+  /web/domains:
+    get:
+      description: Returns all static web domains.
+      operationId: getWebDomains
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/WebDomain'
+                type: array
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Get web domains
+      tags:
+      - Web
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X GET "https://{host}/admin/web/domains" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/WebController
+  /web/update:
+    post:
+      description: "Updates static websites, used for updating domain root directories."
+      operationId: updateWeb
+      responses:
+        "200":
+          content:
+            text/html:
+              example: web updated
+              schema:
+                $ref: '#/components/schemas/WebUpdateResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Update web
+      tags:
+      - Web
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/web/update" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/WebController
+  /mfa/status:
+    post:
+      description: Retrieves which type of MFA is used and configuration
+      operationId: mfaStatus
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaStatusResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Retrieve MFA status for you or another user
+      tags:
+      - MFA
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/mfa/status" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/MFAController
+  /mfa/totp/enable:
+    post:
+      description: Enables TOTP authentication for the currently logged-in admin user
+      operationId: mfaTotpEnable
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MfaEnableRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            text/html:
+              schema:
+                $ref: '#/components/schemas/MfaEnableSuccessResponse'
+          description: Successful operation
+        "400":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Bad request
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Enable TOTP authentication
+      tags:
+      - MFA
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/mfa/totp/enable" \
+            -d "code=123456" \
+            -d "secret=<string>" \
+            -u "<email>:<password>"
+      x-eov-operation-handler: controllers/MFAController
+  /mfa/disable:
+    post:
+      description: Disables multi-factor authentication for the currently logged-in
+        admin user or another user if a 'user' parameter is submitted. Either disables
+        all multi-factor authentication methods or the method corresponding to the
+        optional property `mfa_id`.
+      operationId: mfaTotpDisable
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MfaDisableRequest'
+        required: false
+      responses:
+        "200":
+          content:
+            text/html:
+              schema:
+                $ref: '#/components/schemas/MfaDisableSuccessResponse'
+          description: Successful operation
+        "403":
+          content:
+            text/html:
+              schema:
+                type: string
+          description: Forbidden
+      summary: Disable multi-factor authentication for you or another user
+      tags:
+      - MFA
+      x-codeSamples:
+      - lang: curl
+        source: |
+          curl -X POST "https://{host}/admin/mfa/totp/disable" \
+            -u "<email>:<user_key>"
+      x-eov-operation-handler: controllers/MFAController
+components:
+  requestBodies:
+    DNSCustomRecordRequest:
+      content:
+        text/plain:
+          example: 1.2.3.4
+          schema:
+            description: The value of the DNS record.
+            example: 1.2.3.4
+            type: string
+      required: true
+  schemas:
+    MailUsersResponseFormat:
+      description: Response format (`application/json` or `text/html`).
+      enum:
+      - text
+      - json
+      example: json
+      type: string
+    MailAliasesResponseFormat:
+      description: Response format (`application/json` or `text/html`).
+      enum:
+      - text
+      - json
+      example: json
+      type: string
+    MailUserSetPasswordResponse:
+      description: Mail user set password response.
+      example: OK
+      type: string
+    MailUserRemoveResponse:
+      description: Mail user remove response.
+      example: OK
+      type: string
+    MailUserAddResponse:
+      description: |
+        Mail user add response.
+
+        Can include information about operations related to adding new users, like updating DNS.
+      example: |
+        mail user added
+        updated DNS: OpenDKIM configuration
+      type: string
+    MailUserAddPrivilegeResponse:
+      description: Mail user add admin privilege response.
+      example: OK
+      type: string
+    MailUserRemovePrivilegeResponse:
+      description: Mail user remove admin privilege response.
+      example: OK
+      type: string
+    MailUsersSimpleResponse:
+      description: Get mail users text format response.
+      example: |
+        user1@example.com
+        user2@example.com
+      type: string
+    MailUserPrivilegesResponse:
+      $ref: '#/components/schemas/MailUserPrivilege'
+    MailDomainsResponse:
+      description: Mail domains response.
+      example: |
+        example1.com
+        example2.com
+      type: string
+    MailUsersResponse:
+      description: Get mail aliases JSON format response.
+      items:
+        $ref: '#/components/schemas/MailUserByDomain'
+      type: array
+    MailUserByDomain:
+      description: Mail users by domain.
+      example:
+        domain: example.com
+        users:
+        - privileges:
+          - admin
+          - admin
+          mailbox: /home/user-data/mail/mailboxes/example.com/user
+          email: user@example.com
+          status: active
+        - privileges:
+          - admin
+          - admin
+          mailbox: /home/user-data/mail/mailboxes/example.com/user
+          email: user@example.com
+          status: active
+      properties:
+        domain:
+          description: Hostname format.
+          example: example.com
+          format: hostname
+          type: string
+        users:
+          items:
+            $ref: '#/components/schemas/MailUser'
+          type: array
+      required:
+      - domain
+      - users
+      type: object
+    MailUser:
+      description: Mail user details.
+      example:
+        privileges:
+        - admin
+        - admin
+        mailbox: /home/user-data/mail/mailboxes/example.com/user
+        email: user@example.com
+        status: active
+      properties:
+        email:
+          description: Email format.
+          example: user@example.com
+          format: email
+          type: string
+        privileges:
+          items:
+            $ref: '#/components/schemas/MailUserPrivilege'
+          type: array
+        status:
+          $ref: '#/components/schemas/MailUserStatus'
+        mailbox:
+          example: /home/user-data/mail/mailboxes/example.com/user
+          type: string
+      required:
+      - email
+      - privileges
+      - status
+      type: object
+    MailAliasesSimpleResponse:
+      description: Get mail aliases text format response.
+      example: "abuse@example.com\tadministrator@example.com\nadmin@example.com\t\
+        administrator@example.com\n"
+      type: string
+    MailAliasByDomain:
+      description: Mail aliases by domain.
+      example:
+        aliases:
+        - permitted_senders:
+          - user@example.com
+          - user@example.com
+          address: user@example.com
+          forwards_to:
+          - user@example.com
+          - user@example.com
+          address_display: user@example.com
+          required: true
+        - permitted_senders:
+          - user@example.com
+          - user@example.com
+          address: user@example.com
+          forwards_to:
+          - user@example.com
+          - user@example.com
+          address_display: user@example.com
+          required: true
+        domain: example.com
+      properties:
+        domain:
+          description: Hostname format.
+          example: example.com
+          format: hostname
+          type: string
+        aliases:
+          items:
+            $ref: '#/components/schemas/MailAlias'
+          type: array
+      required:
+      - aliases
+      - domain
+      type: object
+    MailAlias:
+      description: Mail alias details.
+      example:
+        permitted_senders:
+        - user@example.com
+        - user@example.com
+        address: user@example.com
+        forwards_to:
+        - user@example.com
+        - user@example.com
+        address_display: user@example.com
+        required: true
+      properties:
+        address:
+          description: Email format.
+          example: user@example.com
+          format: email
+          type: string
+        address_display:
+          description: Email format.
+          example: user@example.com
+          format: email
+          type: string
+        forwards_to:
+          items:
+            $ref: '#/components/schemas/Email'
+          type: array
+        permitted_senders:
+          items:
+            $ref: '#/components/schemas/Email'
+          nullable: true
+          type: array
+        required:
+          example: true
+          type: boolean
+      required:
+      - address
+      - address_display
+      - forwards_to
+      - permitted_senders
+      - required
+      type: object
+    MailAliasUpsertResponse:
+      description: Mail alias add/update response.
+      example: alias updated
+      type: string
+    MailAliasUpsertRequest:
+      description: Mail alias upsert request.
+      properties:
+        update_if_exists:
+          description: Set to `1` when updating an alias.
+          example: 1
+          format: int32
+          maximum: 1
+          minimum: 0
+          type: integer
+        address:
+          $ref: '#/components/schemas/Email'
+        forwards_to:
+          description: |
+            If adding a regular or catch-all alias, the format needs to be `user@example.com`.
+            Multiple address can be separated by newlines or commas.
+
+            If adding a domain alias, the format needs to be `@example.com`.
+          example: "user1@example.com, user2@example.com"
+          type: string
+        permitted_senders:
+          description: |
+            Mail users that can send mail claiming to be from any address on the alias domain.
+            Multiple address can be separated by newlines or commas.
+
+            Leave empty to allow any mail user listed in `forwards_to` to send mail claiming to be from any address on the alias domain.
+          example: "user1@example.com, user2@example.com"
+          nullable: true
+          type: string
+      required:
+      - address
+      - forwards_to
+      - permitted_senders
+      - update_if_exists
+      type: object
+    MailAliasRemoveResponse:
+      description: Mail alias remove response.
+      example: alias removed
+      type: string
+    MailAliasRemoveRequest:
+      description: Mail aliases remove request.
+      properties:
+        address:
+          $ref: '#/components/schemas/Email'
+      required:
+      - address
+      type: object
+    DNSRecordType:
+      description: DNS record type.
+      enum:
+      - A
+      - AAAA
+      - CAA
+      - CNAME
+      - TXT
+      - MX
+      - SRV
+      - SSHFP
+      - NS
+      example: MX
+      type: string
+    DNSDumpResponse:
+      description: DNS dump response.
+      items:
+        $ref: '#/components/schemas/DNSDumpDomains'
+      type: array
+    DNSDumpDomains:
+      description: |
+        A list of records per domain.
+
+        The first item in the list is the domain and the second item is the list of records.
+      items:
+        $ref: '#/components/schemas/DNSDumpDomains_inner'
+      type: array
+    DNSDumpDomainRecords:
+      description: List of domain records.
+      items:
+        $ref: '#/components/schemas/DNSDumpDomainRecord'
+      type: array
+    DNSDumpDomainRecord:
+      description: Domain DNS record details.
+      properties:
+        explanation:
+          example: Required. Specifies the hostname (and priority) of the machine
+            that handles @example.com mail
+          type: string
+        qname:
+          description: Hostname format.
+          example: example.com
+          format: hostname
+          type: string
+        rtype:
+          $ref: '#/components/schemas/DNSRecordType'
+        value:
+          example: 10 example.com.
+          type: string
+      required:
+      - explanation
+      - qname
+      - type
+      - value
+      type: object
+    DNSCustomRecord:
+      description: Custom DNS record detail detail.
+      example:
+        rtype: MX
+        qname: example.com
+        value: 10 example.com.
+      properties:
+        qname:
+          description: Hostname format.
+          example: example.com
+          format: hostname
+          type: string
+        rtype:
+          $ref: '#/components/schemas/DNSRecordType'
+        value:
+          example: 10 example.com.
+          type: string
+      required:
+      - qname
+      - rtype
+      - value
+      type: object
+    DNSCustomRecordsResponse:
+      description: Custom DNS records response.
+      items:
+        $ref: '#/components/schemas/DNSCustomRecord'
+      type: array
+    DNSZonesResponse:
+      description: DNS zones response.
+      items:
+        $ref: '#/components/schemas/Hostname'
+      type: array
+    DNSZonefileResponse:
+      type: string
+    DNSSecondaryNameserverResponse:
+      description: Secondary nameserver/s response.
+      example:
+        hostnames:
+        - ns1.example.com
+        - ns1.example.com
+      properties:
+        hostnames:
+          items:
+            example: ns1.example.com
+            type: string
+          type: array
+      required:
+      - hostnames
+      type: object
+    DNSCustomRecordRemoveResponse:
+      description: Custom DNS record remove response.
+      example: "updated DNS: example.com"
+      type: string
+    DNSCustomRecordUpsertResponse:
+      description: Custom DNS record add response.
+      example: "updated DNS: example.com"
+      type: string
+    DNSUpdateRequest:
+      description: DNS update request.
+      properties:
+        force:
+          description: Force an update even if mailinabox detects no changes are required.
+          example: 1
+          format: int32
+          maximum: 1
+          minimum: 0
+          type: integer
+      required:
+      - force
+      type: object
+    DNSUpdateResponse:
+      description: DNS update response.
+      example: |
+        updated DNS: example1.com,example2.com
+      type: string
+    DNSSecondaryNameserverAddRequest:
+      description: Secondary nameserver/s add request.
+      properties:
+        hostnames:
+          description: Hostnames separated with commas or spaces.
+          example: "ns2.hostingcompany.com, ns3.hostingcompany.com"
+          type: string
+      required:
+      - hostnames
+      type: object
+    DNSSecondaryNameserverAddResponse:
+      description: Secondary nameserver/s add response.
+      example: "updated DNS: example.com"
+      type: string
+    SystemPrivacyUpdateRequest:
+      description: Update system privacy request.
+      properties:
+        value:
+          $ref: '#/components/schemas/SystemPrivacyStatus'
+      required:
+      - value
+      type: object
+    SystemPrivacyStatus:
+      description: System privacy status.
+      enum:
+      - private
+      - "off"
+      example: private
+      type: string
+    MailUserSetPasswordRequest:
+      description: Mail user set password request.
+      properties:
+        email:
+          $ref: '#/components/schemas/Email'
+        password:
+          format: password
+          type: string
+      required:
+      - email
+      - password
+      type: object
+    MailUserAddRequest:
+      description: Mail user add request.
+      properties:
+        email:
+          $ref: '#/components/schemas/Email'
+        password:
+          format: password
+          type: string
+        privileges:
+          $ref: '#/components/schemas/MailUserPrivilege'
+      required:
+      - email
+      - password
+      - privileges
+      type: object
+    MailUserRemoveRequest:
+      description: Mail user remove request.
+      properties:
+        email:
+          $ref: '#/components/schemas/Email'
+      required:
+      - email
+      type: object
+    MailUserStatus:
+      description: Mail user status.
+      enum:
+      - active
+      - inactive
+      example: active
+      type: string
+    MailUserPrivilege:
+      description: Mail user privilege.
+      enum:
+      - admin
+      - ""
+      example: admin
+      type: string
+    MailUserAddPrivilegeRequest:
+      description: Mail user add privilege request.
+      properties:
+        email:
+          $ref: '#/components/schemas/Email'
+        privilege:
+          $ref: '#/components/schemas/MailUserPrivilege'
+      required:
+      - email
+      - privilege
+      type: object
+    MailUserRemovePrivilegeRequest:
+      description: Mail user remove privilege request.
+      properties:
+        email:
+          $ref: '#/components/schemas/Email'
+        privilege:
+          $ref: '#/components/schemas/MailUserPrivilege'
+      required:
+      - email
+      - privilege
+      type: object
+    SSLCSRGenerateRequest:
+      description: Generate SSL CSR request.
+      properties:
+        countrycode:
+          example: GB
+          type: string
+      required:
+      - countrycode
+      type: object
+    SSLCSRGenerateResponse:
+      description: Generate SSL CSR response.
+      example: |
+        -----BEGIN CERTIFICATE REQUEST-----
+        MIICaDCCAVACAQAwIzELMAkGA1UEBhMCQlMxFDASBgNVBAMMC2V4YW1wbGUuY29t
+        MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3K6dwLM2Nk8kVhIBaZmp
+        eY6y7O0T3jrexEKlW839TVYdcH+K35V1NxilbMFKMuHeowGwFyyiqOy/OUYNeq+T
+        Rz3s4b1qG2p01dwlsXHHYmXLYTAhvqvY+CU5ksieuZbyHRTwbHViQ0xtRXwoVCnj
+        CkN7kJVpkLfVN0/BG6NBFpv/JI8F+hwp+IHdkC1gUXRrLJNC79ERqFP8HoqdQWNw
+        OGGFaOe2aQhvj2zt8wFncyKVc40UKVbSzGGzdL2MPiAJHgZ2lmeY1xDyX1lOt12R
+        IFPwtxmbxaxYaVfe2hxl7m88xV3OjYcKgwVYDusk2XJ37cGew5g+NbBvzEeEUpF9
+        5wIDAQABoAAwDQYJKoZIhvcNAQELBQADggEBAD7UPC3/Nkgpn53mT9puUonYdJg9
+        SD8vvTK/N78CzoEgPNyq+bYbqlcvVPKIdItf9TMiqfOSvW3e3NvkRisYle8Qp+0C
+        8pafXBvQ9eHt5CFeJn4sH9GnxeflOZT/P9Jnp71KtZQvOobirX4GgEWs79g+/NHb
+        Zyf8rbadt9HruNhKA5nlP8cn7Rdc/iuJU8MVSQszI1s1DEcXMPxr6iqb2g87/ifH
+        lWcK59kvRJkCcPhPzjpUy9NulucH4WFA/WqKeDNFS/oC+upV5w8EDEcfnenJFG+N
+        JmFDQESSfUxLPHLC660Wnf3GmrP/duZHpPC+qTe8b1AlQ7zDT3cOaAQ+Mb0=
+        -----END CERTIFICATE REQUEST-----
+      type: string
+    SSLCertificateInstallRequest:
+      description: Install certificate request. `chain` can be an empty string.
+      properties:
+        domain:
+          $ref: '#/components/schemas/Hostname'
+        cert:
+          description: TLS/SSL certificate.
+          example: |
+            -----BEGIN CERTIFICATE-----
+            MIICaDCCAVACAQAwIzELMAkGA1UEBhMCQlMxFDASBgNVBAMMC2V4YW1wbGUuY29t
+            MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3K6dwLM2Nk8kVhIBaZmp
+            eY6y7O0T3jrexEKlW839TVYdcH+K35V1NxilbMFKMuHeowGwFyyiqOy/OUYNeq+T
+            Rz3s4b1qG2p01dwlsXHHYmXLYTAhvqvY+CU5ksieuZbyHRTwbHViQ0xtRXwoVCnj
+            CkN7kJVpkLfVN0/BG6NBFpv/JI8F+hwp+IHdkC1gUXRrLJNC79ERqFP8HoqdQWNw
+            OGGFaOe2aQhvj2zt8wFncyKVc40UKVbSzGGzdL2MPiAJHgZ2lmeY1xDyX1lOt12R
+            IFPwtxmbxaxYaVfe2hxl7m88xV3OjYcKgwVYDusk2XJ37cGew5g+NbBvzEeEUpF9
+            5wIDAQABoAAwDQYJKoZIhvcNAQELBQADggEBAD7UPC3/Nkgpn53mT9puUonYdJg9
+            SD8vvTK/N78CzoEgPNyq+bYbqlcvVPKIdItf9TMiqfOSvW3e3NvkRisYle8Qp+0C
+            8pafXBvQ9eHt5CFeJn4sH9GnxeflOZT/P9Jnp71KtZQvOobirX4GgEWs79g+/NHb
+            Zyf8rbadt9HruNhKA5nlP8cn7Rdc/iuJU8MVSQszI1s1DEcXMPxr6iqb2g87/ifH
+            lWcK59kvRJkCcPhPzjpUy9NulucH4WFA/WqKeDNFS/oC+upV5w8EDEcfnenJFG+N
+            JmFDQESSfUxLPHLC660Wnf3GmrP/duZHpPC+qTe8b1AlQ7zDT3cOaAQ+Mb0=
+            -----END CERTIFICATE-----
+          type: string
+        chain:
+          description: "TLS/SSL intermediate chain (if provided, else empty string)."
+          example: |
+            -----BEGIN CERTIFICATE-----
+            MIICaDCCAVACAQAwIzELMAkGA1UEBhMCQlMxFDASBgNVBAMMC2V4YW1wbGUuY29t
+            MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3K6dwLM2Nk8kVhIBaZmp
+            eY6y7O0T3jrexEKlW839TVYdcH+K35V1NxilbMFKMuHeowGwFyyiqOy/OUYNeq+T
+            Rz3s4b1qG2p01dwlsXHHYmXLYTAhvqvY+CU5ksieuZbyHRTwbHViQ0xtRXwoVCnj
+            CkN7kJVpkLfVN0/BG6NBFpv/JI8F+hwp+IHdkC1gUXRrLJNC79ERqFP8HoqdQWNw
+            OGGFaOe2aQhvj2zt8wFncyKVc40UKVbSzGGzdL2MPiAJHgZ2lmeY1xDyX1lOt12R
+            IFPwtxmbxaxYaVfe2hxl7m88xV3OjYcKgwVYDusk2XJ37cGew5g+NbBvzEeEUpF9
+            5wIDAQABoAAwDQYJKoZIhvcNAQELBQADggEBAD7UPC3/Nkgpn53mT9puUonYdJg9
+            SD8vvTK/N78CzoEgPNyq+bYbqlcvVPKIdItf9TMiqfOSvW3e3NvkRisYle8Qp+0C
+            8pafXBvQ9eHt5CFeJn4sH9GnxeflOZT/P9Jnp71KtZQvOobirX4GgEWs79g+/NHb
+            Zyf8rbadt9HruNhKA5nlP8cn7Rdc/iuJU8MVSQszI1s1DEcXMPxr6iqb2g87/ifH
+            lWcK59kvRJkCcPhPzjpUy9NulucH4WFA/WqKeDNFS/oC+upV5w8EDEcfnenJFG+N
+            JmFDQESSfUxLPHLC660Wnf3GmrP/duZHpPC+qTe8b1AlQ7zDT3cOaAQ+Mb0=
+            -----END CERTIFICATE-----
+          type: string
+      required:
+      - cert
+      - chain
+      - domain
+      type: object
+    SSLCertificateInstallResponse:
+      description: Install certificate response.
+      example: OK
+      type: string
+    SSLCertificatesProvisionResponse:
+      description: SSL certificates provision response.
+      example:
+        requests:
+        - result: installed
+          log:
+          - "The domain name does not resolve to this machine: [Not Set] (A), [Not\
+            \ Set] (AAAA)."
+          domains:
+          - example.com
+          - example.com
+        - result: installed
+          log:
+          - "The domain name does not resolve to this machine: [Not Set] (A), [Not\
+            \ Set] (AAAA)."
+          domains:
+          - example.com
+          - example.com
+      properties:
+        requests:
+          items:
+            $ref: '#/components/schemas/SSLCertificatesProvisionResponse_requests_inner'
+          type: array
+      required:
+      - requests
+      type: object
+    SystemPrivacyStatusResponse:
+      description: |
+        System privacy status response.
+
+          - `true`: Private, new-version checks will not be performed
+          - `false`: Not private, new-version checks will be performed
+      example: false
+      type: boolean
+    SystemVersionResponse:
+      description: System version response.
+      example: v0.46
+      type: string
+    SystemVersionUpstreamResponse:
+      description: System version upstream response.
+      example: v0.47
+      type: string
+    SystemUpdatesResponse:
+      description: System updates response.
+      example: |
+        libgnutls30 (3.5.18-1ubuntu1.4)
+        libxau6 (1:1.0.8-1ubuntu1)
+      type: string
+    SystemUpdatePackagesResponse:
+      description: System update packages response.
+      example: |
+        Reading package lists...
+        Building dependency tree...
+        Reading state information...
+        Calculating upgrade...
+        The following packages will be upgraded:
+          cloud-init grub-common grub-pc grub-pc-bin grub2-common libgnutls30
+          libldap-2.4-2 libldap-common libxau6 linux-firmware python3-distupgrade
+          qemu-guest-agent sosreport ubuntu-release-upgrader-core
+        14 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.
+        Need to get 79.9 MB of archives.
+        After this operation, 3893 kB of additional disk space will be used.
+        Get:1 http://archive.ubuntu.com/ubuntu bionic-updates/main amd64 libgnutls30 amd64 3.5.18-1ubuntu1.4 [645 kB]
+        Preconfiguring packages ...
+        Fetched 79.9 MB in 2s (52.4 MB/s)
+        (Reading database ... 48457 files and directories currently installed.)
+      type: string
+    SystemPrivacyUpdateResponse:
+      description: System privacy update response.
+      example: OK
+      type: string
+    SystemRebootStatusResponse:
+      description: |
+        System reboot status response.
+
+          - `true`: A reboot is required
+          - `false`: A reboot is not required
+      example: true
+      type: boolean
+    SystemRebootResponse:
+      description: System reboot response.
+      example: "No reboot is required, so it is not allowed."
+      type: string
+    SystemStatusResponse:
+      description: System status response.
+      items:
+        $ref: '#/components/schemas/StatusEntry'
+      type: array
+    StatusEntry:
+      description: System status entry.
+      example:
+        extra:
+        - monospace: false
+          text: "Digest Type: 2 / SHA-256"
+        - monospace: false
+          text: "Digest Type: 2 / SHA-256"
+        text: This domain"s DNSSEC DS record is not set
+        type: warning
+      properties:
+        type:
+          $ref: '#/components/schemas/StatusEntryType'
+        text:
+          example: This domain"s DNSSEC DS record is not set
+          type: string
+        extra:
+          items:
+            $ref: '#/components/schemas/StatusEntryExtra'
+          type: array
+      required:
+      - extra
+      - text
+      - type
+      type: object
+    StatusEntryType:
+      description: System status entry type.
+      enum:
+      - heading
+      - ok
+      - warning
+      - error
+      example: warning
+      type: string
+    StatusEntryExtra:
+      description: System entry extra information.
+      example:
+        monospace: false
+        text: "Digest Type: 2 / SHA-256"
+      properties:
+        monospace:
+          example: false
+          type: boolean
+        text:
+          example: "Digest Type: 2 / SHA-256"
+          type: string
+      required:
+      - monospace
+      - text
+      type: object
+    SystemBackupConfigUpdateRequest:
+      description: Backup config update request.
+      properties:
+        target:
+          example: s3://s3.eu-central-1.amazonaws.com/box-example-com
+          format: hostname
+          type: string
+        target_user:
+          example: username
+          type: string
+        target_pass:
+          example: password
+          format: password
+          type: string
+        min_age:
+          example: 3
+          format: int32
+          minimum: 1
+          type: integer
+      required:
+      - min_age
+      - target
+      - target_pass
+      - target_user
+      type: object
+    PerformBackupRequest:
+      description: New backup type.
+      properties:
+        full:
+          example: false
+          type: boolean
+      required:
+      - full
+      type: object
+    PerformBackupResponse:
+      description: Backup creation response.
+      example: OK
+      type: string
+    SystemBackupConfigUpdateResponse:
+      description: Backup config update response.
+      example: OK
+      type: string
+    SystemBackupConfigResponse:
+      description: Backup config response.
+      example:
+        target_pass: target_pass
+        file_target_directory: /home/user-data/backup/encrypted
+        min_age_in_days: 3
+        target_user: target_user
+        enc_pw_file: /home/user-data/backup/secret_key.txt
+        ssh_pub_key: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDb root@box.example.com\n
+        target: s3://s3.eu-central-1.amazonaws.com/box-example-com
+      properties:
+        enc_pw_file:
+          example: /home/user-data/backup/secret_key.txt
+          type: string
+        file_target_directory:
+          example: /home/user-data/backup/encrypted
+          type: string
+        min_age_in_days:
+          example: 3
+          format: int32
+          minimum: 1
+          type: integer
+        ssh_pub_key:
+          example: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDb root@box.example.com\n
+          type: string
+        target:
+          example: s3://s3.eu-central-1.amazonaws.com/box-example-com
+          format: hostname
+          type: string
+        target_user:
+          type: string
+        target_pass:
+          type: string
+      required:
+      - enc_pw_file
+      - file_target_directory
+      - min_age_in_days
+      - ssh_pub_key
+      - target
+      type: object
+    SystemBackupStatusResponse:
+      description: Backup status response. Lists the status for all backups.
+      example:
+        unmatched_file_size: 0
+        error: Something is wrong with the backup
+        backups:
+        - date: 2000-01-23T04:56:07.000+00:00
+          date_str: 2020-08-01 03:37:06 BST
+          size: 125332
+          volumes: 1
+          date_delta: "15 hours, 40 minutes"
+          deleted_in: approx. 6 days
+          full: false
+        - date: 2000-01-23T04:56:07.000+00:00
+          date_str: 2020-08-01 03:37:06 BST
+          size: 125332
+          volumes: 1
+          date_delta: "15 hours, 40 minutes"
+          deleted_in: approx. 6 days
+          full: false
+      properties:
+        backups:
+          items:
+            $ref: '#/components/schemas/SystemBackupStatus'
+          type: array
+        unmatched_file_size:
+          example: 0
+          format: int32
+          type: integer
+        error:
+          example: Something is wrong with the backup
+          type: string
+      required:
+      - unmatched_file_size
+      type: object
+    SystemBackupStatus:
+      description: Backup status details.
+      example:
+        date: 2000-01-23T04:56:07.000+00:00
+        date_str: 2020-08-01 03:37:06 BST
+        size: 125332
+        volumes: 1
+        date_delta: "15 hours, 40 minutes"
+        deleted_in: approx. 6 days
+        full: false
+      properties:
+        date:
+          format: date-time
+          type: string
+        date_delta:
+          example: "15 hours, 40 minutes"
+          type: string
+        date_str:
+          example: 2020-08-01 03:37:06 BST
+          type: string
+        deleted_in:
+          example: approx. 6 days
+          type: string
+        full:
+          example: false
+          type: boolean
+        size:
+          example: 125332
+          format: int32
+          type: integer
+        volumes:
+          example: 1
+          format: int32
+          type: integer
+      required:
+      - date
+      - date_delta
+      - date_str
+      - full
+      - size
+      - volumes
+      type: object
+    SSLStatusResponse:
+      description: SSL status response for all relevant domains.
+      example:
+        can_provision:
+        - can_provision
+        - can_provision
+        status:
+        - domain: example.com
+          text: Signed & valid. The certificate expires in 87 days on 10/28/20.
+          status: success
+        - domain: example.com
+          text: Signed & valid. The certificate expires in 87 days on 10/28/20.
+          status: success
+      properties:
+        can_provision:
+          items:
+            type: string
+          type: array
+        status:
+          items:
+            $ref: '#/components/schemas/SSLStatus'
+          type: array
+      required:
+      - can_provision
+      - status
+      type: object
+    SSLStatus:
+      description: SSL status details for domain.
+      example:
+        domain: example.com
+        text: Signed & valid. The certificate expires in 87 days on 10/28/20.
+        status: success
+      properties:
+        domain:
+          description: Hostname format.
+          example: example.com
+          format: hostname
+          type: string
+        status:
+          $ref: '#/components/schemas/SSLStatusType'
+        text:
+          example: Signed & valid. The certificate expires in 87 days on 10/28/20.
+          type: string
+      required:
+      - domain
+      - status
+      - text
+      type: object
+    SSLStatusType:
+      description: SSL status type.
+      enum:
+      - success
+      - danger
+      - not-applicable
+      example: success
+      type: string
+    Email:
+      description: Email format.
+      example: user@example.com
+      format: email
+      type: string
+    Hostname:
+      description: Hostname format.
+      example: example.com
+      format: hostname
+      type: string
+    MeResponse:
+      description: Me (user) response.
+      example:
+        privileges:
+        - admin
+        - admin
+        reason: Incorrect username or password
+        api_key: 12345abcde
+        email: user@example.com
+        status: invalid
+      properties:
+        api_key:
+          example: 12345abcde
+          type: string
+        email:
+          description: Email format.
+          example: user@example.com
+          format: email
+          type: string
+        privileges:
+          items:
+            $ref: '#/components/schemas/MailUserPrivilege'
+          type: array
+        reason:
+          example: Incorrect username or password
+          type: string
+        status:
+          $ref: '#/components/schemas/MeAuthStatus'
+      required:
+      - status
+      type: object
+    MeAuthStatus:
+      description: Me (user) authentication result.
+      enum:
+      - ok
+      - invalid
+      example: invalid
+      type: string
+    WebDomain:
+      description: Web domain details.
+      example:
+        ssl_certificate:
+        - No certificate installed.
+        - No certificate installed.
+        static_enabled: true
+        domain: example.com
+        root: /home/user-data/www/default
+        custom_root: /home/user-data/www/example.com
+      properties:
+        custom_root:
+          example: /home/user-data/www/example.com
+          type: string
+        domain:
+          description: Hostname format.
+          example: example.com
+          format: hostname
+          type: string
+        root:
+          example: /home/user-data/www/default
+          type: string
+        ssl_certificate:
+          items:
+            $ref: '#/components/schemas/WebDomain_ssl_certificate_inner'
+          maxItems: 2
+          minItems: 2
+          type: array
+          uniqueItems: true
+        static_enabled:
+          example: true
+          type: boolean
+      required:
+      - custom_root
+      - domain
+      - root
+      - ssl_certificate
+      - static_enabled
+      type: object
+    WebUpdateResponse:
+      description: Web update response.
+      example: web updated
+      type: string
+    SmtpRelayConfig:
+      description: SMTP configuration details.
+      example:
+        auth_enabled: true
+        host: sendgrid.net
+        user: someuser
+        enabled: true
+      properties:
+        enabled:
+          example: true
+          type: boolean
+        host:
+          example: sendgrid.net
+          type: string
+        auth_enabled:
+          example: true
+          type: boolean
+        user:
+          example: someuser
+          type: string
+      required:
+      - auth_enabled
+      - enabled
+      - host
+      - user
+      type: object
+    SetSmtpRelayConfigRequest:
+      description: SMTP Configuration form
+      properties:
+        enabled:
+          example: true
+          type: boolean
+        host:
+          example: sendgrid.net
+          type: string
+        auth_enabled:
+          example: true
+          type: boolean
+        user:
+          example: apikey
+          type: string
+        key:
+          example: '******'
+          type: string
+      required:
+      - auth_enabled
+      - enabled
+      - host
+      - key
+      - user
+      type: object
+    PgpKey:
+      description: "Parseable, human-friendly information about a PGP key"
+      example:
+        master_fpr: master_fpr
+        ids_emails:
+        - user@example.com
+        - user@example.com
+        ids:
+        - ids
+        - ids
+        revoked: true
+        subkeys:
+        - expires: 6
+          expired: true
+          auth: true
+          encr: true
+          sign: true
+          bits: 0
+          fpr: fpr
+          cert: true
+          expires_days: 2000-01-23T04:56:07.000+00:00
+          algorithm: algorithm
+          master: true
+        - expires: 6
+          expired: true
+          auth: true
+          encr: true
+          sign: true
+          bits: 0
+          fpr: fpr
+          cert: true
+          expires_days: 2000-01-23T04:56:07.000+00:00
+          algorithm: algorithm
+          master: true
+      properties:
+        ids:
+          items:
+            type: string
+          type: array
+        ids_emails:
+          items:
+            $ref: '#/components/schemas/Email'
+          type: array
+        master_fpr:
+          type: string
+        revoked:
+          type: boolean
+        subkeys:
+          items:
+            $ref: '#/components/schemas/PgpKey_subkeys_inner'
+          type: array
+      required:
+      - ids
+      - master_fpr
+      - revoked
+      - subkeys
+      type: object
+    PgpKeyring:
+      description: Describes all PGP keys in the keyring
+      example:
+        imported:
+        - master_fpr: master_fpr
+          ids_emails:
+          - user@example.com
+          - user@example.com
+          ids:
+          - ids
+          - ids
+          revoked: true
+          subkeys:
+          - expires: 6
+            expired: true
+            auth: true
+            encr: true
+            sign: true
+            bits: 0
+            fpr: fpr
+            cert: true
+            expires_days: 2000-01-23T04:56:07.000+00:00
+            algorithm: algorithm
+            master: true
+          - expires: 6
+            expired: true
+            auth: true
+            encr: true
+            sign: true
+            bits: 0
+            fpr: fpr
+            cert: true
+            expires_days: 2000-01-23T04:56:07.000+00:00
+            algorithm: algorithm
+            master: true
+        - master_fpr: master_fpr
+          ids_emails:
+          - user@example.com
+          - user@example.com
+          ids:
+          - ids
+          - ids
+          revoked: true
+          subkeys:
+          - expires: 6
+            expired: true
+            auth: true
+            encr: true
+            sign: true
+            bits: 0
+            fpr: fpr
+            cert: true
+            expires_days: 2000-01-23T04:56:07.000+00:00
+            algorithm: algorithm
+            master: true
+          - expires: 6
+            expired: true
+            auth: true
+            encr: true
+            sign: true
+            bits: 0
+            fpr: fpr
+            cert: true
+            expires_days: 2000-01-23T04:56:07.000+00:00
+            algorithm: algorithm
+            master: true
+        daemon:
+          master_fpr: master_fpr
+          ids_emails:
+          - user@example.com
+          - user@example.com
+          ids:
+          - ids
+          - ids
+          revoked: true
+          subkeys:
+          - expires: 6
+            expired: true
+            auth: true
+            encr: true
+            sign: true
+            bits: 0
+            fpr: fpr
+            cert: true
+            expires_days: 2000-01-23T04:56:07.000+00:00
+            algorithm: algorithm
+            master: true
+          - expires: 6
+            expired: true
+            auth: true
+            encr: true
+            sign: true
+            bits: 0
+            fpr: fpr
+            cert: true
+            expires_days: 2000-01-23T04:56:07.000+00:00
+            algorithm: algorithm
+            master: true
+      properties:
+        daemon:
+          $ref: '#/components/schemas/PgpKey'
+        imported:
+          items:
+            $ref: '#/components/schemas/PgpKey'
+          type: array
+      required:
+      - daemon
+      - imported
+      type: object
+    PgpKeyExport:
+      description: ASCII-Armored export of one or more public PGP key(s).
+      example: |
+        -----BEGIN PGP PUBLIC KEY BLOCK-----
+
+        mQINBF957dABEADz7P2flznzRq5wuUhxDS+wytdn8yQhMXZr7kvcpwbRl9f7+dx3
+        mH8kH7owN9u8yBDsA9iW7fFNJnbSJNtPIFdOB08AeeIUGx6jsvWFd08+WdDulu1l
+        wyR/UPvmYDYPwI5fqMy/Edne0qqgg6mzVk30cr8xDxaE1RNf3rVAWVdfbAUNF35M
+        NhzjsrHZPKqpgvTLbsrV+87mc83FUwSgHQITY/E/04kJE2IbnNj3+5zYMlkhwEd/
+        1afI9OFNTtIk5zYdoLPa8o/sNZZTjCgSp7pLI/2/o1CzI/NL2CEKjJgo5uwg9gHu
+        e6vcUxez8uWAMOBwF3ogptr5mioT0ewbBto5Lbkv5jn8WbcpifbrDXqws1PZO+ZJ
+        jUdhnrEWxE7DV1tM3CMYq5IzgbrhBPRUYhPX196HMRTRa2PwM1a8tPeilzM7NyrM
+        MTYV3TO11kTKJcRr8/iSt/XpAQsV9EqI1ecUcDFX+U5LVEImHD3+BmQCT713LBRK
+        HWWmY/oHumxxVjS0OQZyik8tIOOK5sy8JZr2A+p6qiLGs0SU6yUCPUonSjuc98ky
+        rByV2GcVaxzT4qk1RiReDXkjIlGIXE4SzVUPHyYYoRvJVrRkQDN6fegvyQqszEAH
+        7OTXgNZ55BB+WWKCzhAoO2IJiwJXWLp3xqHni86gXSGrXi5RbmprGNHkwQARAQAB
+        tERQb3dlciBNYWlsLWluLWEtQm94IE1hbmFnZW1lbnQgRGFlbW9uIDxhZG1pbmlz
+        dHJhdG9yQG1haWxpbmFib3gubGFuPokCVAQTAQoAPhYhBGIDe4i3Q2Jpl+Y+/iRp
+        OU+8DPjaBQJfee3QAhsvBQkA7U4ABQsJCAcCBhUKCQgLAgQWAgMBAh4BAheAAAoJ
+        ECRpOU+8DPjaagYP/0nJyYG3ELcmqleJxSe6CuDrhNHTNyrJROqCTkeJmsWDxePK
+        tRjuSZSkK7ZCjxthTwo4Yi5ylSh7a8Qt7OzvwaFcK78JvYYAz08tErDa7+t+Gj3T
+        32M00Wa/DykzBJqDlmTtAYVlmfPOegF30XOYQ8e7IGMOETZQClJE37g00Gz32QKi
+        zf8ONje924xRU3PETySQjHtc5Zoio0Av8mARB2hiGQScNoQU3qzELX85x4qjKUJe
+        mdIuSlf8NRwZ2Df2kBYBLzuX2lAKiIxY63V0j/a87OLViHdOQwb5SaV5s/3R/qf7
+        NSaVRsbxYuRO638K402tVffvl1jH9hvooRfsc7lj5XkxKAkMIDTJmBAVcXy4+n77
+        J20ZEz22ko87AwmHU6ZFh+RJiueOsqx09nnGOwmp7IXB47EDips1uVwPQ7GbkM1K
+        69CiS2K90X4WCaJhgLd7Saj8hCvfEUaHvUk/XoOGPjxj9iPzxFZgEb/2osSjqkJ5
+        9vQt31NbWpFJThHPXjixwIiWcn4m5yqcXjSNaHISvAZPtK55FXLp7uAOgiCygonK
+        onuboXh6AK6cT0cdtOgWsz3AQ2mTkhKbK6hW7eIVwEs8SFPb5qNSxWxlssF5/QQi
+        vo4j/rEYuOuqVo+TwsO0XNCfsA8as/UPLA9CgIxXXoIFmy2rL298lPQg5HgJ
+        =via/
+        -----END PGP PUBLIC KEY BLOCK-----
+      type: string
+    PgpKeyImportResult:
+      description: The result of the key import operation
+      properties:
+        keys_read:
+          description: Keys in the import
+          format: int32
+          type: integer
+        keys_added:
+          description: New keys
+          format: int32
+          type: integer
+        keys_unchanged:
+          description: Keys that were not modified
+          format: int32
+          type: integer
+        uids_added:
+          description: New user ID's
+          format: int32
+          type: integer
+        sigs_added:
+          description: New key signatures
+          format: int32
+          type: integer
+        revs_added:
+          description: New revocation certificates
+          format: int32
+          type: integer
+      required:
+      - keys_added
+      - keys_read
+      - keys_unchanged
+      - revs_added
+      - sigs_added
+      - uids_added
+      type: object
+    MfaStatusResponse:
+      example:
+        enabled_mfa:
+          id: id
+          label: label
+          type: type
+        new_mfa:
+          secret: secret
+          type: type
+          qr_code_base64: qr_code_base64
+      properties:
+        enabled_mfa:
+          $ref: '#/components/schemas/MfaStatusResponse_enabled_mfa'
+        new_mfa:
+          $ref: '#/components/schemas/MfaStatusResponse_new_mfa'
+      type: object
+    MfaEnableRequest:
+      properties:
+        secret:
+          type: string
+        code:
+          type: string
+        label:
+          type: string
+      required:
+      - code
+      - secret
+      type: object
+    MfaEnableSuccessResponse:
+      type: string
+    MfaDisableRequest:
+      properties:
+        mfa_id:
+          nullable: true
+          type: string
+      type: object
+    MfaDisableSuccessResponse:
+      type: string
+    LogoutResponse:
+      example:
+        status: status
+      properties:
+        status:
+          type: string
+      type: object
+    getWKDstatus_200_response:
+      example:
+        wkd: "{}"
+        keys:
+        - master_fpr: master_fpr
+          ids_emails:
+          - user@example.com
+          - user@example.com
+          ids:
+          - ids
+          - ids
+          revoked: true
+          subkeys:
+          - expires: 6
+            expired: true
+            auth: true
+            encr: true
+            sign: true
+            bits: 0
+            fpr: fpr
+            cert: true
+            expires_days: 2000-01-23T04:56:07.000+00:00
+            algorithm: algorithm
+            master: true
+          - expires: 6
+            expired: true
+            auth: true
+            encr: true
+            sign: true
+            bits: 0
+            fpr: fpr
+            cert: true
+            expires_days: 2000-01-23T04:56:07.000+00:00
+            algorithm: algorithm
+            master: true
+        - master_fpr: master_fpr
+          ids_emails:
+          - user@example.com
+          - user@example.com
+          ids:
+          - ids
+          - ids
+          revoked: true
+          subkeys:
+          - expires: 6
+            expired: true
+            auth: true
+            encr: true
+            sign: true
+            bits: 0
+            fpr: fpr
+            cert: true
+            expires_days: 2000-01-23T04:56:07.000+00:00
+            algorithm: algorithm
+            master: true
+          - expires: 6
+            expired: true
+            auth: true
+            encr: true
+            sign: true
+            bits: 0
+            fpr: fpr
+            cert: true
+            expires_days: 2000-01-23T04:56:07.000+00:00
+            algorithm: algorithm
+            master: true
+      properties:
+        keys:
+          items:
+            $ref: '#/components/schemas/PgpKey'
+          type: array
+        wkd:
+          type: object
+      required:
+      - keys
+      - wkd
+      type: object
+    DNSDumpDomains_inner:
+      oneOf:
+      - $ref: '#/components/schemas/Hostname'
+      - $ref: '#/components/schemas/DNSDumpDomainRecords'
+    SSLCertificatesProvisionResponse_requests_inner:
+      example:
+        result: installed
+        log:
+        - "The domain name does not resolve to this machine: [Not Set] (A), [Not Set]\
+          \ (AAAA)."
+        domains:
+        - example.com
+        - example.com
+      properties:
+        log:
+          example:
+          - "The domain name does not resolve to this machine: [Not Set] (A), [Not\
+            \ Set] (AAAA)."
+          items:
+            type: string
+          type: array
+        result:
+          enum:
+          - installed
+          - error
+          - skipped
+          example: installed
+          type: string
+        domains:
+          items:
+            $ref: '#/components/schemas/Hostname'
+          type: array
+      required:
+      - domains
+      - log
+      - result
+      type: object
+    WebDomain_ssl_certificate_inner:
+      oneOf:
+      - example: No certificate installed.
+        type: string
+      - enum:
+        - danger
+        - success
+        example: danger
+        type: string
+    PgpKey_subkeys_inner:
+      example:
+        expires: 6
+        expired: true
+        auth: true
+        encr: true
+        sign: true
+        bits: 0
+        fpr: fpr
+        cert: true
+        expires_days: 2000-01-23T04:56:07.000+00:00
+        algorithm: algorithm
+        master: true
+      properties:
+        algorithm:
+          type: string
+        auth:
+          type: boolean
+        cert:
+          type: boolean
+        encr:
+          type: boolean
+        sign:
+          type: boolean
+        bits:
+          format: int32
+          type: integer
+        expired:
+          type: boolean
+        expires:
+          format: int32
+          type: integer
+        expires_days:
+          format: date-time
+          type: string
+        fpr:
+          type: string
+        master:
+          type: boolean
+      required:
+      - algorithm
+      - auth
+      - bits
+      - cert
+      - encr
+      - expired
+      - expires
+      - expires_date
+      - expires_days
+      - fpr
+      - master
+      - sign
+      type: object
+    MfaStatusResponse_enabled_mfa:
+      example:
+        id: id
+        label: label
+        type: type
+      nullable: true
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        label:
+          type: string
+      type: object
+    MfaStatusResponse_new_mfa:
+      example:
+        secret: secret
+        type: type
+        qr_code_base64: qr_code_base64
+      properties:
+        type:
+          type: string
+        secret:
+          type: string
+        qr_code_base64:
+          type: string
+      type: object
+  securitySchemes:
+    basicAuth:
+      description: |
+        Credentials can be supplied using the `Authorization` header in
+        format `Authorization: Basic {access-token}`.
+
+        The `access-token` is comprised of the Base64 encoding of `username:password`.
+        The `username` is the mail user's email address, and `password` can either be the mail user's
+        password, or the `api_key` returned from the `login` operation.
+
+        When using `curl`, you can supply user credentials using the `-u` or `--user` parameter.
+      scheme: basic
+      type: http
